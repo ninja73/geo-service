@@ -6,37 +6,30 @@ import geo.Message.{GridCell, LocationTag}
 import scala.util.parsing.combinator.RegexParsers
 
 sealed trait Transformer[T <: Message] {
-  val parser: BaseParsers[T]
   val empty: String
 
-  def storeFormat(obj: T): String
+  def toStorage(obj: T): String
 
-  def readToObj(str: String): Option[T]
+  def readObj(str: String): Option[T]
 }
 
-object Transformer {
+trait LocationTagTransform extends Transformer[LocationTag] {
+  self: BaseParsers[LocationTag] ⇒
+  val empty: String = f"${""}%98s"
 
-  implicit val locationTagTransform: Transformer[LocationTag] = new Transformer[LocationTag] {
+  def toStorage(obj: LocationTag): String =
+    f"${obj.userId.getOrElse(0)}%32d,${obj.lon}%32f,${obj.lat}%32f"
 
-    val parser = new LocationTagParser()
-    val empty: String = f"${""}%98s"
+  def readObj(str: String): Option[LocationTag] = parseRoot(str)
+}
 
-    def storeFormat(obj: LocationTag): String =
-      f"${obj.userId}%32d,${obj.lon}%32f,${obj.lat}%32f"
+trait GridCellTransform extends Transformer[GridCell] {
+  self: BaseParsers[GridCell] ⇒
 
-    def readToObj(str: String): Option[LocationTag] =
-      parser.parseRoot(str)
-  }
+  val empty: String = f"${""}%131s"
 
-  implicit val GridCellTransform: Transformer[GridCell] = new Transformer[GridCell] {
+  def toStorage(obj: GridCell): String =
+    f"${obj.id}%32d,${obj.tileX}%32d,${obj.tileY}%32d,${obj.distanceError}%32f"
 
-    val parser = new GridCellParser()
-    val empty: String = f"${""}%131s"
-
-    def storeFormat(obj: GridCell): String =
-      f"${obj.id}%32d,${obj.tileX}%32d,${obj.tileY}%32d,${obj.distanceError}%32f"
-
-    def readToObj(str: String): Option[GridCell] = parser.parseRoot(str)
-  }
-
+  def readObj(str: String): Option[GridCell] = parseRoot(str)
 }
