@@ -4,13 +4,9 @@ sealed trait Entity
 
 object Entity {
 
-  case class LabelResponse(message: String)
+  case class UserMarkChange(userId: Option[Long])
 
-  case class UpdateDeleteStatus(isSuccess: Boolean)
-
-  case class GetStatistics(lon: Float, lat: Float)
-
-  case class StatisticsResponse(countUser: Long)
+  case class StatisticsResponse(countUser: Option[Long])
 
   case class PointId(lon: Int, lat: Int)
 
@@ -19,11 +15,5 @@ object Entity {
   case class UserMarker(userId: Long, lon: Float, lat: Float) extends Entity
 
   case class CmdConfig(userMarkersPath: String = "", gridPath: String = "")
-
-  case class LabelSearchException(message: String = "Label not found",
-                                  cause: Throwable = None.orNull) extends Exception(message, cause)
-
-  case class CellSearchException(message: String = "Cell not found",
-                                  cause: Throwable = None.orNull) extends Exception(message, cause)
 
 }

@@ -5,6 +5,7 @@ scalaVersion := "2.12.6"
 assemblyOutputPath in assembly := file(s"assembly/${name.value}-${version.value}.jar")
 
 libraryDependencies ++=
-  Dependency.AkkaHttp ++
+  Dependency.Akka ++
+    Dependency.LevelDb ++
     Dependency.Logging ++
     Dependency.Testing ++ Seq(Dependency.scopt)

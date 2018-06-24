@@ -1,45 +1,33 @@
 package geo.route
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.server.{Directives, Route}
+import akka.pattern.ask
+import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
+import geo.actor.StorageActor._
 import geo.entity.Entity._
-import geo.store.InMemoryStorage
-import geo.util.Distance.calculate
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 import scala.language.implicitConversions
 import scala.util.{Failure, Success}
-import geo.util.GridStoreSupport._
+import scala.concurrent.duration._
 
-class GeoRoute(userMarkersStorage: InMemoryStorage[Long, UserMarker], gridStorage: InMemoryStorage[PointId, GridPoint])
-              (implicit actorSystem: ActorSystem)
+class GeoRoute(storage: ActorRef)(implicit actorSystem: ActorSystem)
   extends Directives with JsonSupport with LazyLogging {
 
   implicit val dispatcher: ExecutionContextExecutor = actorSystem.dispatcher
+  implicit val timeout: Timeout = Timeout(20.seconds)
 
   val route: Route =
     path("find" / "marker") {
       parameters('userId.as[Long], 'lon.as[Float], 'lat.as[Float]) { (userId, lon, lat) ⇒
         val currentLocation = UserMarker(userId, lon, lat)
-        val response = userMarkersStorage.get(currentLocation.userId).flatMap {
-          case Some(label) ⇒
-            val distance = calculate(currentLocation, label)
-            val pointId = PointId(label.lon, label.lat)
-            gridStorage.get(pointId).map {
-              case Some(gridCell) ⇒
-                if (gridCell.distanceError < distance)
-                  "вдали от метки"
-                else "рядом с меткой"
-              case None ⇒
-                throw CellSearchException()
-            }
-          case None ⇒ Future.failed(LabelSearchException())
-        }
+        val response = (storage ? FindMarker(currentLocation))
+          .mapTo[Option[String]]
 
         onComplete(response) {
-          case Success(result) ⇒
-            complete(LabelResponse(result))
+          case Success(result) ⇒ complete(result)
           case Failure(e) ⇒
             complete(e.getMessage)
         }
@@ -47,42 +35,39 @@ class GeoRoute(userMarkersStorage: InMemoryStorage[Long, UserMarker], gridStorag
       }
     } ~ path("marker" / "insert") {
       post {
-        entity(as[UserMarker]) { locationTag ⇒
-          val response = gridStorage.incrementPoint(locationTag)
-            .flatMap(_ ⇒ userMarkersStorage.update(locationTag.userId, locationTag))
-            .map(_.isDefined)
-            .map(UpdateDeleteStatus)
+        entity(as[UserMarker]) { marker ⇒
+          val response = (storage ? AddUserMark(marker))
+            .mapTo[Option[Long]]
+            .map(UserMarkChange)
+
           onComplete(response) {
-            case Success(r) ⇒ complete(r)
+            case Success(result) ⇒ complete(result)
             case Failure(e) ⇒ complete(e.getMessage)
           }
         }
       }
     } ~ path("marker" / "update") {
       put {
-        entity(as[UserMarker]) { userMarker ⇒
-          val response = for {
-            oldUserMarker ← userMarkersStorage.get(userMarker.userId)
-            _ ← gridStorage.decrementPoint(oldUserMarker)
-            _ ← gridStorage.incrementPoint(userMarker)
-            newUserMarker ← userMarkersStorage.update(userMarker.userId, userMarker)
-          } yield UpdateDeleteStatus(newUserMarker.isDefined)
+        entity(as[UserMarker]) { marker ⇒
+          val response = (storage ? UpdateUserMark(marker))
+            .mapTo[Option[Long]]
+            .map(UserMarkChange)
 
           onComplete(response) {
-            case Success(r) ⇒ complete(r)
+            case Success(result) ⇒ complete(result)
             case Failure(e) ⇒ complete(e.getMessage)
           }
         }
       }
     } ~ path("marker" / "delete") {
       delete {
-        entity(as[UserMarker]) { locationTag ⇒
-          val response = gridStorage.decrementPoint(Some(locationTag))
-            .flatMap(_ ⇒ userMarkersStorage.delete(locationTag.userId))
-            .map(_.isDefined)
-            .map(UpdateDeleteStatus)
+        entity(as[UserMarker]) { marker ⇒
+          val response = (storage ? DeleteUserMark(marker.userId))
+            .mapTo[Option[Long]]
+            .map(UserMarkChange)
+
           onComplete(response) {
-            case Success(r) ⇒ complete(r)
+            case Success(result) ⇒ complete(result)
             case Failure(e) ⇒ complete(e.getMessage)
           }
         }
@@ -90,11 +75,11 @@ class GeoRoute(userMarkersStorage: InMemoryStorage[Long, UserMarker], gridStorag
     } ~ path("point" / "info") {
       parameters('lon.as[Int], 'lat.as[Int]) { (lon, lat) ⇒
         val pointId = PointId(lon, lat)
-        val response = gridStorage.get(pointId).collect {
-          case Some(point) ⇒ StatisticsResponse(point.markerCount)
-        }
+        val response = (storage ? GetPointInf(pointId))
+          .mapTo[Option[Long]]
+          .map(StatisticsResponse)
         onComplete(response) {
-          case Success(r) ⇒ complete(r)
+          case Success(result) ⇒ complete(result)
           case Failure(e) ⇒ complete(e.getMessage)
         }
       }
@@ -103,7 +88,6 @@ class GeoRoute(userMarkersStorage: InMemoryStorage[Long, UserMarker], gridStorag
 }
 
 object GeoRoute {
-  def apply(userStorage: InMemoryStorage[Long, UserMarker], gridStorage: InMemoryStorage[PointId, GridPoint])
-           (implicit system: ActorSystem): GeoRoute =
-    new GeoRoute(userStorage, gridStorage)
+  def apply(storage: ActorRef)(implicit system: ActorSystem): GeoRoute =
+    new GeoRoute(storage)
 }

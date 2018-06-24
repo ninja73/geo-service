@@ -1,14 +1,17 @@
 package geo
 
+import akka.actor.ActorRef
 import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, MediaTypes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import akka.testkit.TestKit
 import akka.util.ByteString
+import geo.actor.StorageActor
 import geo.entity.Entity._
 import geo.route.{GeoRoute, JsonSupport}
 import geo.store.InMemoryStorage
 import org.scalatest.{Matchers, WordSpec}
 
-class RestSpec extends WordSpec with Matchers with ScalatestRouteTest with JsonSupport{
+class RestSpec extends WordSpec with Matchers with ScalatestRouteTest with JsonSupport {
 
   val userStorage: InMemoryStorage[Long, UserMarker] = InMemoryStorage.create[Long, UserMarker]
   val gridStorage: InMemoryStorage[PointId, GridPoint] = InMemoryStorage.create[PointId, GridPoint]
@@ -40,23 +43,27 @@ class RestSpec extends WordSpec with Matchers with ScalatestRouteTest with JsonS
        |}
         """.stripMargin)
 
-  "The service" should {
+  override def afterAll {
+    TestKit.shutdownActorSystem(system)
+  }
 
-    val geoRoute = GeoRoute(userStorage, gridStorage).route
+  "The service" should {
+    val storage: ActorRef = system.actorOf(StorageActor.props(userStorage, gridStorage))
+    val geoRoute = GeoRoute(storage).route
 
     "Get statistics" in {
       Get("/point/info?lon=0&lat=-17") ~> geoRoute ~> check {
-        responseAs[StatisticsResponse] shouldEqual StatisticsResponse(2)
+        responseAs[StatisticsResponse] shouldEqual StatisticsResponse(Some(2))
       }
     }
     "Get position status" in {
       Get("/find/marker?userId=3&lon=2.698&lat=-46.0755") ~> geoRoute ~> check {
-        responseAs[LabelResponse] shouldEqual LabelResponse("вдали от метки")
+        responseAs[Option[String]] shouldEqual Some("вдали от метки")
       }
     }
     "Get position status2" in {
       Get("/find/marker?userId=3&lon=5.26522&lat=-26.40852") ~> geoRoute ~> check {
-        responseAs[LabelResponse] shouldEqual LabelResponse("рядом с меткой")
+        responseAs[Option[String]] shouldEqual Some("рядом с меткой")
       }
     }
     "Add user marker" in {
@@ -66,9 +73,9 @@ class RestSpec extends WordSpec with Matchers with ScalatestRouteTest with JsonS
         entity = HttpEntity(MediaTypes.`application/json`, jsonRequest))
 
       postRequest ~> geoRoute ~> check {
-        responseAs[UpdateDeleteStatus] shouldEqual UpdateDeleteStatus(true)
+        responseAs[UserMarkChange] shouldEqual UserMarkChange(Some(1))
         Get("/point/info?lon=2&lat=-3") ~> geoRoute ~> check {
-          responseAs[StatisticsResponse] shouldEqual StatisticsResponse(2)
+          responseAs[StatisticsResponse] shouldEqual StatisticsResponse(Some(2))
         }
       }
     }
@@ -85,9 +92,9 @@ class RestSpec extends WordSpec with Matchers with ScalatestRouteTest with JsonS
         entity = HttpEntity(MediaTypes.`application/json`, jsonRequest))
 
       postRequest ~> geoRoute ~> check {
-        responseAs[UpdateDeleteStatus] shouldEqual UpdateDeleteStatus(true)
+        responseAs[UserMarkChange] shouldEqual UserMarkChange(Some(7))
         Get("/point/info?lon=2&lat=-3") ~> geoRoute ~> check {
-          responseAs[StatisticsResponse] shouldEqual StatisticsResponse(3)
+          responseAs[StatisticsResponse] shouldEqual StatisticsResponse(Some(3))
         }
       }
     }
@@ -98,9 +105,9 @@ class RestSpec extends WordSpec with Matchers with ScalatestRouteTest with JsonS
         entity = HttpEntity(MediaTypes.`application/json`, jsonRequest))
 
       postRequest ~> geoRoute ~> check {
-        responseAs[UpdateDeleteStatus] shouldEqual UpdateDeleteStatus(true)
+        responseAs[UserMarkChange] shouldEqual UserMarkChange(Some(1))
         Get("/point/info?lon=2&lat=-3") ~> geoRoute ~> check {
-          responseAs[StatisticsResponse] shouldEqual StatisticsResponse(2)
+          responseAs[StatisticsResponse] shouldEqual StatisticsResponse(Some(2))
         }
       }
     }

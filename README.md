@@ -1,13 +1,9 @@
 ## Geo-service
 
-При реализации сервиса, для хранения данных специально были использованы 
-стандартные средства языка scala, чтобы показать умение работать 
-со структурами в многопоточной среде.
-
 #### Технологии, сборка и запуск
 
 Основной стек: 
-[Scala](https://www.scala-lang.org/), [sbt](http://www.scala-sbt.org/), [Akka-Http, Akka Stream](https://doc.akka.io/docs/akka-http/current/?language=scala)
+[Scala](https://www.scala-lang.org/), [sbt](http://www.scala-sbt.org/), [Akka-Http, Akka Stream, Akka Persistence](https://doc.akka.io/docs/akka-http/current/?language=scala)
 
 Собрать приложение: `sbt assembly`
 
@@ -52,6 +48,8 @@ Output path: `assembly/geo-service-0.1.jar`
 off-heap подхода.
 В качестве storage используется thread-safe TrieMap, алгоритм lock-free.
 При каждой операции с метками пользователя обновляем статистику сетки.
+В качестве сохранения состояния после сбоев или остановки используется 
+akka persistence.
 
 Для определения расстояния между точками использовалась 
 формула модификация для антиподов
