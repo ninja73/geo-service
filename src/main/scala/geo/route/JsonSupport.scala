@@ -1,11 +1,10 @@
-package geo
+package geo.route
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import geo.Message._
+import geo.entity.Entity._
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val userLocationFormat: RootJsonFormat[UserLocation] = jsonFormat3(UserLocation)
   implicit val locationTagFormat: RootJsonFormat[LocationTag] = jsonFormat3(LocationTag)
   implicit val labelResponseFormat: RootJsonFormat[LabelResponse] = jsonFormat1(LabelResponse)
   implicit val updateDeleteStatusFormat: RootJsonFormat[UpdateDeleteStatus] = jsonFormat1(UpdateDeleteStatus)

@@ -1,13 +1,11 @@
 package geo.util
 
-import geo.Message
-import geo.Message.{GridCell, LocationTag}
+import geo.entity.Entity.{Grid, LocationTag}
+import geo.entity.Entity
 
 import scala.util.parsing.combinator.RegexParsers
 
-sealed trait Transformer[T <: Message] {
-  val empty: String
-
+sealed trait Transformer[T <: Entity] {
   def toStorage(obj: T): String
 
   def readObj(str: String): Option[T]
@@ -15,21 +13,18 @@ sealed trait Transformer[T <: Message] {
 
 trait LocationTagTransform extends Transformer[LocationTag] {
   self: BaseParsers[LocationTag] ⇒
-  val empty: String = f"${""}%98s"
 
   def toStorage(obj: LocationTag): String =
-    f"${obj.userId.getOrElse(0)}%32d,${obj.lon}%32f,${obj.lat}%32f"
+    s"${obj.userId},${obj.lon},${obj.lat}"
 
   def readObj(str: String): Option[LocationTag] = parseRoot(str)
 }
 
-trait GridCellTransform extends Transformer[GridCell] {
-  self: BaseParsers[GridCell] ⇒
+trait GridTransform extends Transformer[Grid] {
+  self: BaseParsers[Grid] ⇒
 
-  val empty: String = f"${""}%131s"
+  def toStorage(obj: Grid): String =
+    s"${obj.id.lon},${obj.id.lat},${obj.distanceError}"
 
-  def toStorage(obj: GridCell): String =
-    f"${obj.id}%32d,${obj.tileX}%32d,${obj.tileY}%32d,${obj.distanceError}%32f"
-
-  def readObj(str: String): Option[GridCell] = parseRoot(str)
+  def readObj(str: String): Option[Grid] = parseRoot(str)
 }

@@ -2,65 +2,52 @@ package geo.route
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server.{Directives, Route}
-import akka.stream.IOResult
 import com.typesafe.scalalogging.LazyLogging
-import geo.JsonSupport
-import geo.Message._
-import geo.store.Storage
+import geo.entity.Entity._
+import geo.store.InMemoryStorage
 import geo.util.Distance.calculate
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
-class GeoRoute(userLabelStore: Storage[LocationTag, Int], geographicGrid: Storage[GridCell, (Int, Int)])
+class GeoRoute(userStorage: InMemoryStorage[Long, LocationTag], gridStorage: InMemoryStorage[GridId, Grid])
               (implicit actorSystem: ActorSystem)
   extends Directives with JsonSupport with LazyLogging {
 
   implicit val dispatcher: ExecutionContextExecutor = actorSystem.dispatcher
 
-  def extractIOResult(ioResult: IOResult): UpdateDeleteStatus = {
-    ioResult.status match {
-      case Success(_) ⇒
-        UpdateDeleteStatus(true)
-      case Failure(e) ⇒
-        logger.error(e.getMessage, e)
-        UpdateDeleteStatus(false)
-    }
-  }
-
   val route: Route =
-    path("find" / "distance") {
-      post {
-        entity(as[UserLocation]) { currentLocation ⇒
-          val response = userLabelStore.readRow(currentLocation.userId).flatMap {
-            case Some(label) ⇒
-              val distance = calculate(currentLocation, label)
-              val gridIndex = (label.lon.toInt, label.lat.toInt)
-              geographicGrid.readRow(gridIndex).map {
-                case Some(gridCell) ⇒
-                  if (gridCell.distanceError < distance)
-                    "вдали от метки"
-                  else "рядом с меткой"
-                case None ⇒
-                  throw CellSearchException()
-              }
-            case None ⇒ Future.failed(LabelSearchException())
-          }
-          onComplete(response) {
-            case Success(result) ⇒
-              complete(LabelResponse(result))
-            case Failure(e) ⇒
-              complete(e.getMessage)
-          }
+    path("find" / "position") {
+      parameters('userId.as[Long], 'lon.as[Float], 'lat.as[Float]) { (userId, lon, lat) ⇒
+        val currentLocation = LocationTag(userId, lon, lat)
+        val response = userStorage.get(currentLocation.userId).flatMap {
+          case Some(label) ⇒
+            val distance = calculate(currentLocation, label)
+            val gridId = GridId(label.lon.toInt, label.lat.toInt)
+            gridStorage.get(gridId).map {
+              case Some(gridCell) ⇒
+                if (gridCell.distanceError < distance)
+                  "вдали от метки"
+                else "рядом с меткой"
+              case None ⇒
+                throw CellSearchException()
+            }
+          case None ⇒ Future.failed(LabelSearchException())
         }
+
+        onComplete(response) {
+          case Success(result) ⇒
+            complete(LabelResponse(result))
+          case Failure(e) ⇒
+            complete(e.getMessage)
+        }
+
       }
     } ~ path("label" / "insert") {
       post {
         entity(as[LocationTag]) { locationTag ⇒
-          val response = userLabelStore
-            .insertRow(id ⇒ locationTag.copy(userId = Some(id)))
-            .map(extractIOResult)
-
+          val response = userStorage
+            .update(locationTag.userId, locationTag)
           onComplete(response) {
             case Success(r) ⇒ complete(r)
             case Failure(e) ⇒ complete(e.getMessage)
@@ -70,10 +57,7 @@ class GeoRoute(userLabelStore: Storage[LocationTag, Int], geographicGrid: Storag
     } ~ path("label" / "update") {
       post {
         entity(as[LocationTag]) { locationTag ⇒
-          val response = locationTag.userId
-            .map(id ⇒ userLabelStore.updateRow(id, locationTag).map(extractIOResult))
-            .getOrElse(Future.failed(LabelSearchException()))
-
+          val response = userStorage.update(locationTag.userId, locationTag)
           onComplete(response) {
             case Success(r) ⇒ complete(r)
             case Failure(e) ⇒ complete(e.getMessage)
@@ -83,10 +67,7 @@ class GeoRoute(userLabelStore: Storage[LocationTag, Int], geographicGrid: Storag
     } ~ path("label" / "delete") {
       post {
         entity(as[LocationTag]) { locationTag ⇒
-          val response = locationTag.userId
-            .map(id ⇒ userLabelStore.deleteRow(id).map(extractIOResult))
-            .getOrElse(Future.failed(LabelSearchException()))
-
+          val response = userStorage.delete(locationTag.userId)
           onComplete(response) {
             case Success(r) ⇒ complete(r)
             case Failure(e) ⇒ complete(e.getMessage)
@@ -94,28 +75,26 @@ class GeoRoute(userLabelStore: Storage[LocationTag, Int], geographicGrid: Storag
         }
       }
     } ~ path("cell" / "stats") {
-      post {
-        entity(as[GetStatistics]) { getStatistics ⇒
-          val gridIndex = (getStatistics.lon.toInt, getStatistics.lat.toInt)
-          val response = geographicGrid.readRow(gridIndex).flatMap {
-            case Some(gridCell) ⇒
-              userLabelStore.searchByValue { tag ⇒
-                tag.lon.toInt == gridCell.tileX && tag.lat.toInt == gridCell.tileY
-              }.map { i ⇒ StatisticsResponse(i) }
-            case None ⇒
-              Future.failed(CellSearchException())
-          }
-          onComplete(response) {
-            case Success(r) ⇒ complete(r)
-            case Failure(e) ⇒ complete(e.getMessage)
-          }
+      parameters('lon.as[Int], 'lat.as[Int]) { (lon, lat) ⇒
+        val gridId = GridId(lon, lat)
+        val response = gridStorage.get(gridId).flatMap {
+          case Some(_) ⇒
+            userStorage.getStatistics { tag ⇒
+              tag.lon.toInt == gridId.lon && tag.lat.toInt == gridId.lat
+            }.map(count ⇒ StatisticsResponse(count))
+          case None ⇒
+            Future.failed(CellSearchException())
+        }
+        onComplete(response) {
+          case Success(r) ⇒ complete(r)
+          case Failure(e) ⇒ complete(e.getMessage)
         }
       }
     }
 }
 
 object GeoRoute {
-  def apply(userLabelStore: Storage[LocationTag, Int], geographicGrid: Storage[GridCell, (Int, Int)])
+  def apply(userStorage: InMemoryStorage[Long, LocationTag], gridStorage: InMemoryStorage[GridId, Grid])
            (implicit system: ActorSystem): GeoRoute =
-    new GeoRoute(userLabelStore, geographicGrid)
+    new GeoRoute(userStorage, gridStorage)
 }

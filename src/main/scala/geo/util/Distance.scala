@@ -1,12 +1,12 @@
 package geo.util
 
-import geo.Message.{LocationTag, UserLocation}
+import geo.entity.Entity.LocationTag
 
 object Distance {
 
   val EarthRadius = 6372795
 
-  def calculate(userLocation: UserLocation, locationTags: LocationTag): Double = {
+  def calculate(userLocation: LocationTag, locationTags: LocationTag): Double = {
     val lat1 = userLocation.lat * math.Pi / 180
     val long1 = userLocation.lon * math.Pi / 180
 
