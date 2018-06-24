@@ -23,29 +23,35 @@ Output path: `assembly/geo-service-0.1.jar`
 
     Post: `"/marker/insert"` body: `{userId: Long, lon: Float, lat: Float}`
     response: `{userId: Long}`
+    
     Сложность выполнения запроса: O(1)
+    
 - Обновление метки:
     
     Put: `"/marker/update"` body: `{userId: Long, lon: Float, lat: Float}`
     response: `{userId: Long}`
+    
     Сложность выполнения запроса: O(1)
 
 - Удаление метки:
     
     Delete: `"/marker/delete"` body: `{userId: Long, lon: Float, lat: Float}`
     response: `{userId: Long}`
+    
     Сложность выполнения запроса: O(1)
     
 - Получить информацию о место положения:
     
     Get: `"/find/marker?userId=1&lon=1.23&lan=2.323"` 
     response: `String`
+    
     Сложность выполнения запроса: O(1)
     
 - Получить статистику по метке:
     
     Get: `"/point/info?lon=2&lan=3"` 
     response: `{countUser: Int}`
+    
     Сложность выполнения запроса: O(1)
 
 Данные из файлов загружаются RAM. 
