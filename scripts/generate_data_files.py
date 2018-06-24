@@ -1,4 +1,18 @@
 import random
+import argparse
+
+parser = argparse.ArgumentParser(description='Process coordinates.')
+parser.add_argument('--min_lon', metavar='N', type=int,
+                    help='max_lan is a required')
+parser.add_argument('--max_lon', metavar='N', type=int,
+                    help='max_lon is a required')
+parser.add_argument('--min_lan', metavar='N', type=int,
+                    help='min_lan is a required')
+parser.add_argument('--max_lan', metavar='N', type=int,
+                    help='max_lan is a required')
+
+args = parser.parse_args()
+
 
 def generate_grid(min_lon, max_lon, min_lan, max_lan):
     file = open("./src/main/resources/grid.txt", "w")
@@ -14,9 +28,5 @@ def generate_user(min_lon, max_lon, min_lan, max_lan):
         file.write(val)
 
 if __name__ == '__main__':
-    min_lon = -30
-    max_lon = 30
-    min_lan = -90
-    max_lan = 90
-    generate_grid(min_lon, max_lon, min_lan, max_lan)
-    generate_user(min_lon, max_lon, min_lan, max_lan)
+    generate_grid(args.min_lon, args.max_lon, args.min_lan, args.max_lan)
+    generate_user(args.min_lon, args.max_lon, args.min_lan, args.max_lan)

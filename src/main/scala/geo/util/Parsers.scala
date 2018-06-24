@@ -1,7 +1,7 @@
 package geo.util
 
 import com.typesafe.scalalogging.LazyLogging
-import geo.entity.Entity.{GridCell, GridId, LocationTag}
+import geo.entity.Entity.{GridPoint, PointId, UserMarker}
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.{PackratParsers, RegexParsers}
@@ -28,22 +28,22 @@ trait BaseParsers[T] extends RegexParsers with PackratParsers with LazyLogging {
 
 }
 
-trait LocationTagParser extends BaseParsers[LocationTag] {
+trait MarkerParser extends BaseParsers[UserMarker] {
 
-  val resultParse: Parser[LocationTag] = number ~ sepField ~ float ~ sepField ~ float <~ opt(Eol) ^^ {
-    case userId ~ _ ~ lon ~ _ ~ lat ⇒ LocationTag(userId.toLong, lon.toFloat, lat.toFloat)
+  val resultParse: Parser[UserMarker] = number ~ sepField ~ float ~ sepField ~ float <~ opt(Eol) ^^ {
+    case userId ~ _ ~ lon ~ _ ~ lat ⇒ UserMarker(userId.toLong, lon.toFloat, lat.toFloat)
   }
 
-  def root: Parser[LocationTag] = resultParse
+  def root: Parser[UserMarker] = resultParse
 }
 
-trait GridParser extends BaseParsers[GridCell] {
+trait GridParser extends BaseParsers[GridPoint] {
 
-  val resultParse: Parser[GridCell] =
+  val resultParse: Parser[GridPoint] =
     number ~ sepField ~ number ~ sepField ~ float <~ opt(Eol) ^^ {
       case tileX ~ _ ~ tileY ~ _ ~ error ⇒
-        GridCell(GridId(tileX.toInt, tileY.toInt), error.toFloat)
+        GridPoint(PointId(tileX.toInt, tileY.toInt), error.toFloat)
     }
 
-  def root: Parser[GridCell] = resultParse
+  def root: Parser[GridPoint] = resultParse
 }

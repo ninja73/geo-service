@@ -1,8 +1,65 @@
 ## Geo-service
 
+При реализации сервиса, для хранения данных специально были использованы 
+стандартные средства языка scala, чтобы показать умение работать 
+со структурами в многопоточной среде.
+
 #### Технологии, сборка и запуск
 
 Основной стек: 
 [Scala](https://www.scala-lang.org/), [sbt](http://www.scala-sbt.org/), [Akka-Http, Akka Stream](https://doc.akka.io/docs/akka-http/current/?language=scala)
 
+Собрать приложение: `sbt assembly`
 
+Output path: `target/scala-2.12/geo-service-0.1.jar`
+
+Пример запуска приложения:
+`java -jar ./target/scala-2.12/geo-service-0.1.jar -g ./src/main/resources/grid.txt -u ./src/main/resources/user_labels.txt`
+
+Описание параметров запуска:
+
+- -u, --user-storage - путь до файла с пользовательскими метками
+- -g, --grid-storage  - geo сетка
+
+Описание api:
+
+- Добавление метки:
+
+    Post: `"/label/insert"` body: `{userId: Long, lon: Float, lat: Float}`
+    Сложность выполнения запроса: O(1)
+- Обновление метки:
+    
+    Put: `"label/update"` body: `{userId: Long, lon: Float, lat: Float}`
+    Сложность выполнения запроса: O(1)
+
+- Удаление метки:
+    
+    Delete: `"label/delete"` body: `{userId: Long, lon: Float, lat: Float}`
+    Сложность выполнения запроса: O(1)
+    
+- Получить информацию о место положения:
+    
+    Get: `"find/position?userId=1&lon=1.23&lan=2.323"` response: `{message: String}`
+    Сложность выполнения запроса: O(1)
+    
+- Получить статистику по метке:
+    
+    Get: `"cell/stats?lon=2&lan=3"` response: `{countUser: Int}`
+    Сложность выполнения запроса: O(1)
+
+Данные из файлов загружаются RAM. 
+Если есть ограничение по памяти то возможно стоит посмотреть в сторону 
+off-heap подхода.
+В качестве storage используется thread-safe TrieMap, алгоритм lock-free.
+При каждой операции с метками пользователя обновляем статистику сетки.
+
+#### Генерация таблиц
+
+Генерация реализована на python, стандартными средствами.
+`scripts/generate_data_files.py --min_lon -40 --max_lon 40 --min_lan -60 --max_lan 60`
+
+#### Замечания и дальнейшие доработки
+
+1. Хранить данные в бд как в NoSQL, так и RDBMS.
+2. Стоит использовать микросервисную архитектуру (разбить логику на сервисы)
+3. Сделать систему более масштабируемой, а для этого не должны хранить состояние в приложении.

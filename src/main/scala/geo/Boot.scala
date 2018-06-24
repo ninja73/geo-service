@@ -9,16 +9,17 @@ import geo.config.Config
 import geo.entity.Entity._
 import geo.route.CustomExceptionHandler._
 import geo.route.GeoRoute
-import geo.store.InMemoryStorage
+import geo.store.{InMemoryStorage, SaveSnapshot}
 import geo.util._
+import geo.util.GridStoreSupport._
 
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /** Пример запуска проекта:
   * sbt "run
   * -u ./src/main/resources/user_labels.txt
-  * -g ./src/main/resources/user_labels.txt
+  * -g ./src/main/resources/grid.txt
   * */
 object Boot extends App with LazyLogging {
 
@@ -28,28 +29,34 @@ object Boot extends App with LazyLogging {
       implicit val materializer: ActorMaterializer = ActorMaterializer.create(system)
       implicit val dispatcher: ExecutionContext = system.dispatcher
 
-      val userLabelLoader = new LoadData[LocationTag](config.userLabelsPath) with LocationTagTransform with LocationTagParser
-      val gridLoader = new LoadData[GridCell](config.gridPath) with GridTransform with GridParser
+      val userMarkLoader = new LoadData[UserMarker](config.userMarkersPath) with MarkerTransform with MarkerParser
+      val gridLoader = new LoadData[GridPoint](config.gridPath) with GridTransform with GridParser
 
-      val userStorage = InMemoryStorage[Long, LocationTag]()
-      val gridStorage = InMemoryStorage[GridId, GridCell]()
+      val userMarkStorage = InMemoryStorage.create[Long, UserMarker]
+      val gridStorage = InMemoryStorage.create[PointId, GridPoint]
 
-      val bindingFuture = for {
-        _ ← userLabelLoader.load(tag ⇒ userStorage.update(tag.userId, tag))
+      val init = for {
         _ ← gridLoader.load(g ⇒ gridStorage.update(g.id, g))
+        _ ← userMarkLoader.load(tag ⇒
+          userMarkStorage.update(tag.userId, tag).flatMap(marker ⇒
+            marker.map(gridStorage.incrementPoint)
+              .getOrElse(Future.successful(None))
+          ))
         router = handleExceptions(exceptionHandler) {
-          GeoRoute(userStorage, gridStorage).route
+          GeoRoute(userMarkStorage, gridStorage).route
         }
         bind ← Http().bindAndHandle(router, Config.webServer.host, Config.webServer.port)
       } yield {
+        gridStorage.getStore.take(100).foreach(p ⇒ println(p.markerCount))
         logger.info(s"Started host: ${Config.webServer.host}, port: ${Config.webServer.port}")
         bind
       }
 
+      system.actorOf(SaveSnapshot.props(userMarkStorage, gridStorage, userMarkLoader, gridLoader))
       Await.ready(system.whenTerminated, Duration.Inf)
-      bindingFuture
-        .flatMap(_.unbind())
-        .onComplete(_ ⇒ system.terminate())
+
+      init.flatMap(_.unbind()).onComplete(_ ⇒ system.terminate())
+
     case None ⇒
       logger.info("Parse args failed")
   }

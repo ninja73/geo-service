@@ -2,22 +2,24 @@ package geo.store
 
 import geo.entity.Entity
 
+import scala.annotation.tailrec
+import scala.collection.Iterable
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{ExecutionContext, Future}
 
-class InMemoryStorage[ID, T <: Entity] {
+class InMemoryStorage[I, T <: Entity] {
 
-  private val cache: TrieMap[ID, T] = TrieMap.empty[ID, T]
+  private val cache: TrieMap[I, T] = TrieMap.empty[I, T]
 
-  def update(id: ID, obj: T)
+  def update(id: I, obj: T)
             (implicit dispatcher: ExecutionContext): Future[Option[T]] =
     Future(cache.put(id, obj))
 
-  def delete(id: ID)
+  def delete(id: I)
             (implicit dispatcher: ExecutionContext): Future[Option[T]] =
     Future(cache.remove(id))
 
-  def get(id: ID)
+  def get(id: I)
          (implicit dispatcher: ExecutionContext): Future[Option[T]] =
     Future(cache.get(id))
 
@@ -30,8 +32,25 @@ class InMemoryStorage[ID, T <: Entity] {
         else acc
       }
     }
+
+  def getStore: Iterable[T] = cache.values
+
+  def updateFiled(id: I)(f: T ⇒ T)
+                 (implicit dispatcher: ExecutionContext): Future[Option[T]] = {
+    Future {
+      @tailrec
+      def loop(id: I, obj: T, f: T ⇒ T): T = {
+        val newObj = f(obj)
+
+        if (cache.replace(id, obj, newObj)) newObj
+        else loop(id, cache(id), f)
+      }
+
+      cache.get(id).map(old ⇒ loop(id, old, f))
+    }
+  }
 }
 
 object InMemoryStorage {
-  def apply[ID, T <: Entity](): InMemoryStorage[ID, T] = new InMemoryStorage[ID, T]()
+  def create[ID, T <: Entity]: InMemoryStorage[ID, T] = new InMemoryStorage[ID, T]()
 }

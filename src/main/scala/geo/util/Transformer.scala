@@ -1,6 +1,6 @@
 package geo.util
 
-import geo.entity.Entity.{GridCell, LocationTag}
+import geo.entity.Entity.{GridPoint, UserMarker}
 import geo.entity.Entity
 
 import scala.util.parsing.combinator.RegexParsers
@@ -11,20 +11,20 @@ sealed trait Transformer[T <: Entity] {
   def readObj(str: String): Option[T]
 }
 
-trait LocationTagTransform extends Transformer[LocationTag] {
-  self: BaseParsers[LocationTag] ⇒
+trait MarkerTransform extends Transformer[UserMarker] {
+  self: BaseParsers[UserMarker] ⇒
 
-  def toStorage(obj: LocationTag): String =
+  def toStorage(obj: UserMarker): String =
     s"${obj.userId},${obj.lon},${obj.lat}"
 
-  def readObj(str: String): Option[LocationTag] = parseRoot(str)
+  def readObj(str: String): Option[UserMarker] = parseRoot(str)
 }
 
-trait GridTransform extends Transformer[GridCell] {
-  self: BaseParsers[GridCell] ⇒
+trait GridTransform extends Transformer[GridPoint] {
+  self: BaseParsers[GridPoint] ⇒
 
-  def toStorage(obj: GridCell): String =
+  def toStorage(obj: GridPoint): String =
     s"${obj.id.lon},${obj.id.lat},${obj.distanceError}"
 
-  def readObj(str: String): Option[GridCell] = parseRoot(str)
+  def readObj(str: String): Option[GridPoint] = parseRoot(str)
 }

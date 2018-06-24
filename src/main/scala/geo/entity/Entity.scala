@@ -12,13 +12,13 @@ object Entity {
 
   case class StatisticsResponse(countUser: Long)
 
-  case class GridId(lon: Int, lat: Int)
+  case class PointId(lon: Int, lat: Int)
 
-  case class GridCell(id: GridId, distanceError: Float) extends Entity
+  case class GridPoint(id: PointId, distanceError: Float, markerCount: Int = 0) extends Entity
 
-  case class LocationTag(userId: Long, lon: Float, lat: Float) extends Entity
+  case class UserMarker(userId: Long, lon: Float, lat: Float) extends Entity
 
-  case class CmdConfig(userLabelsPath: String = "", gridPath: String = "")
+  case class CmdConfig(userMarkersPath: String = "", gridPath: String = "")
 
   case class LabelSearchException(message: String = "Label not found",
                                   cause: Throwable = None.orNull) extends Exception(message, cause)

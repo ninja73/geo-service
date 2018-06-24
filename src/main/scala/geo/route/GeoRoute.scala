@@ -8,24 +8,25 @@ import geo.store.InMemoryStorage
 import geo.util.Distance.calculate
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.language.implicitConversions
 import scala.util.{Failure, Success}
+import geo.util.GridStoreSupport._
 
-class GeoRoute(userStorage: InMemoryStorage[Long, LocationTag], gridStorage: InMemoryStorage[GridId, GridCell])
+class GeoRoute(userMarkersStorage: InMemoryStorage[Long, UserMarker], gridStorage: InMemoryStorage[PointId, GridPoint])
               (implicit actorSystem: ActorSystem)
   extends Directives with JsonSupport with LazyLogging {
 
   implicit val dispatcher: ExecutionContextExecutor = actorSystem.dispatcher
 
   val route: Route =
-    path("find" / "position") {
+    path("find" / "marker") {
       parameters('userId.as[Long], 'lon.as[Float], 'lat.as[Float]) { (userId, lon, lat) ⇒
-        val currentLocation = LocationTag(userId, lon, lat)
-        val response = userStorage.get(currentLocation.userId).flatMap {
+        val currentLocation = UserMarker(userId, lon, lat)
+        val response = userMarkersStorage.get(currentLocation.userId).flatMap {
           case Some(label) ⇒
             val distance = calculate(currentLocation, label)
-            println("!!" + distance)
-            val gridId = GridId(label.lon.toInt, label.lat.toInt)
-            gridStorage.get(gridId).map {
+            val pointId = PointId(label.lon, label.lat)
+            gridStorage.get(pointId).map {
               case Some(gridCell) ⇒
                 if (gridCell.distanceError < distance)
                   "вдали от метки"
@@ -44,47 +45,53 @@ class GeoRoute(userStorage: InMemoryStorage[Long, LocationTag], gridStorage: InM
         }
 
       }
-    } ~ path("label" / "insert") {
+    } ~ path("marker" / "insert") {
       post {
-        entity(as[LocationTag]) { locationTag ⇒
-          val response = userStorage
-            .update(locationTag.userId, locationTag)
+        entity(as[UserMarker]) { locationTag ⇒
+          val response = gridStorage.incrementPoint(locationTag)
+            .flatMap(_ ⇒ userMarkersStorage.update(locationTag.userId, locationTag))
+            .map(_.isDefined)
+            .map(UpdateDeleteStatus)
           onComplete(response) {
             case Success(r) ⇒ complete(r)
             case Failure(e) ⇒ complete(e.getMessage)
           }
         }
       }
-    } ~ path("label" / "update") {
+    } ~ path("marker" / "update") {
       put {
-        entity(as[LocationTag]) { locationTag ⇒
-          val response = userStorage.update(locationTag.userId, locationTag)
+        entity(as[UserMarker]) { userMarker ⇒
+          val response = for {
+            oldUserMarker ← userMarkersStorage.get(userMarker.userId)
+            _ ← gridStorage.decrementPoint(oldUserMarker)
+            _ ← gridStorage.incrementPoint(userMarker)
+            newUserMarker ← userMarkersStorage.update(userMarker.userId, userMarker)
+          } yield UpdateDeleteStatus(newUserMarker.isDefined)
+
           onComplete(response) {
             case Success(r) ⇒ complete(r)
             case Failure(e) ⇒ complete(e.getMessage)
           }
         }
       }
-    } ~ path("label" / "delete") {
+    } ~ path("marker" / "delete") {
       delete {
-        entity(as[LocationTag]) { locationTag ⇒
-          val response = userStorage.delete(locationTag.userId)
+        entity(as[UserMarker]) { locationTag ⇒
+          val response = gridStorage.decrementPoint(Some(locationTag))
+            .flatMap(_ ⇒ userMarkersStorage.delete(locationTag.userId))
+            .map(_.isDefined)
+            .map(UpdateDeleteStatus)
           onComplete(response) {
             case Success(r) ⇒ complete(r)
             case Failure(e) ⇒ complete(e.getMessage)
           }
         }
       }
-    } ~ path("cell" / "stats") {
+    } ~ path("point" / "info") {
       parameters('lon.as[Int], 'lat.as[Int]) { (lon, lat) ⇒
-        val gridId = GridId(lon, lat)
-        val response = gridStorage.get(gridId).flatMap {
-          case Some(_) ⇒
-            userStorage.getStatistics { tag ⇒
-              tag.lon.toInt == gridId.lon && tag.lat.toInt == gridId.lat
-            }.map(count ⇒ StatisticsResponse(count))
-          case None ⇒
-            Future.failed(CellSearchException())
+        val pointId = PointId(lon, lat)
+        val response = gridStorage.get(pointId).collect {
+          case Some(point) ⇒ StatisticsResponse(point.markerCount)
         }
         onComplete(response) {
           case Success(r) ⇒ complete(r)
@@ -92,10 +99,11 @@ class GeoRoute(userStorage: InMemoryStorage[Long, LocationTag], gridStorage: InM
         }
       }
     }
+
 }
 
 object GeoRoute {
-  def apply(userStorage: InMemoryStorage[Long, LocationTag], gridStorage: InMemoryStorage[GridId, GridCell])
+  def apply(userStorage: InMemoryStorage[Long, UserMarker], gridStorage: InMemoryStorage[PointId, GridPoint])
            (implicit system: ActorSystem): GeoRoute =
     new GeoRoute(userStorage, gridStorage)
 }

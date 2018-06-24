@@ -7,6 +7,7 @@ import akka.stream.{IOResult, Materializer}
 import akka.util.ByteString
 import akka.{Done, NotUsed}
 import geo.entity.Entity
+import scala.collection.immutable.Iterable
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -31,6 +32,8 @@ class LoadData[T <: Entity](fileName: String)
       .map(str ⇒ ByteString(s"$str$Eol"))
       .toMat(FileIO.toPath(Paths.get(fileName)))(Keep.right)
 
-  def save(m: Map[Long, T]): Future[IOResult] =
-    Source[String](m.values.map(toStorage).toIndexedSeq).runWith(append)
+  def save(m: Iterable[T]): Future[IOResult] = {
+    Source[String](m.map(toStorage)).runWith(append)
+  }
+
 }
