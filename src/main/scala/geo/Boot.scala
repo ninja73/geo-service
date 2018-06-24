@@ -28,13 +28,11 @@ object Boot extends App with LazyLogging {
       implicit val materializer: ActorMaterializer = ActorMaterializer.create(system)
       implicit val dispatcher: ExecutionContext = system.dispatcher
 
-      val userLabelLoader = new LoadData[LocationTag](config.userLabelsPath)
-        with LocationTagTransform with LocationTagParser
-      val gridLoader = new LoadData[Grid](config.gridPath)
-        with GridTransform with GridParser
+      val userLabelLoader = new LoadData[LocationTag](config.userLabelsPath) with LocationTagTransform with LocationTagParser
+      val gridLoader = new LoadData[GridCell](config.gridPath) with GridTransform with GridParser
 
       val userStorage = InMemoryStorage[Long, LocationTag]()
-      val gridStorage = InMemoryStorage[GridId, Grid]()
+      val gridStorage = InMemoryStorage[GridId, GridCell]()
 
       val bindingFuture = for {
         _ ← userLabelLoader.load(tag ⇒ userStorage.update(tag.userId, tag))

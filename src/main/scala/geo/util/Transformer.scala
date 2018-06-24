@@ -1,6 +1,6 @@
 package geo.util
 
-import geo.entity.Entity.{Grid, LocationTag}
+import geo.entity.Entity.{GridCell, LocationTag}
 import geo.entity.Entity
 
 import scala.util.parsing.combinator.RegexParsers
@@ -20,11 +20,11 @@ trait LocationTagTransform extends Transformer[LocationTag] {
   def readObj(str: String): Option[LocationTag] = parseRoot(str)
 }
 
-trait GridTransform extends Transformer[Grid] {
-  self: BaseParsers[Grid] ⇒
+trait GridTransform extends Transformer[GridCell] {
+  self: BaseParsers[GridCell] ⇒
 
-  def toStorage(obj: Grid): String =
+  def toStorage(obj: GridCell): String =
     s"${obj.id.lon},${obj.id.lat},${obj.distanceError}"
 
-  def readObj(str: String): Option[Grid] = parseRoot(str)
+  def readObj(str: String): Option[GridCell] = parseRoot(str)
 }

@@ -1,7 +1,7 @@
 package geo.util
 
 import com.typesafe.scalalogging.LazyLogging
-import geo.entity.Entity.{Grid, GridId, LocationTag}
+import geo.entity.Entity.{GridCell, GridId, LocationTag}
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.{PackratParsers, RegexParsers}
@@ -37,13 +37,13 @@ trait LocationTagParser extends BaseParsers[LocationTag] {
   def root: Parser[LocationTag] = resultParse
 }
 
-trait GridParser extends BaseParsers[Grid] {
+trait GridParser extends BaseParsers[GridCell] {
 
-  val resultParse: Parser[Grid] =
+  val resultParse: Parser[GridCell] =
     number ~ sepField ~ number ~ sepField ~ float <~ opt(Eol) ^^ {
       case tileX ~ _ ~ tileY ~ _ ~ error ⇒
-        Grid(GridId(tileX.toInt, tileY.toInt), error.toFloat)
+        GridCell(GridId(tileX.toInt, tileY.toInt), error.toFloat)
     }
 
-  def root: Parser[Grid] = resultParse
+  def root: Parser[GridCell] = resultParse
 }

@@ -14,7 +14,7 @@ object Entity {
 
   case class GridId(lon: Int, lat: Int)
 
-  case class Grid(id: GridId, distanceError: Float) extends Entity
+  case class GridCell(id: GridId, distanceError: Float) extends Entity
 
   case class LocationTag(userId: Long, lon: Float, lat: Float) extends Entity
 
