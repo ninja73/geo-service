@@ -1,5 +1,7 @@
 ## Geo-service
 
+Основное назначение сервиса Определение до отмеченной точки на сетки кординат.
+
 #### Технологии, сборка и запуск
 
 Основной стек: 
@@ -10,12 +12,33 @@
 Output path: `assembly/geo-service-0.1.jar`
 
 Пример запуска приложения:
-`java -jar ./target/scala-2.12/geo-service-0.1.jar -g ./src/main/resources/grid.txt -u ./src/main/resources/user_labels.txt`
+`java -jar -Dconfig.file=$PATH_CONF_FILE $PATH_JAR_FILE -g ./src/main/resources/grid.txt -u ./src/main/resources/user_labels.txt`
 
 Описание параметров запуска:
 
 - -u, --user-storage - путь до файла с пользовательскими метками
 - -g, --grid-storage  - geo сетка
+
+Описание conf файла:
+
+В качестве базового conf файла можно использовать `./src/main/resource/application.conf`
+
+Параметры запуска web server:
+```
+web-server {
+  host = "localhost"
+  port = 9090
+}
+```
+
+Настройка Akka Persistence:
+
+Необходима указать path для journal и snapshot.
+ 
+```
+akka.persistence.journal.leveldb.dir = "some dir"
+akka.persistence.snapshot-store.local.dir = "some dir"
+```
 
 Описание api:
 
